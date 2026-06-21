@@ -38,6 +38,9 @@ export async function createCommunityPost(post) {
     content: post.content,
     author: post.author || '익명',
     crowd_level: post.crowdLevel || null,
+    location_based: Boolean(post.locationBased),
+    distance_to_building: post.distanceToBuilding ?? null,
+    user_accuracy: post.userAccuracy ?? null,
   };
   console.log('[HYWAY] inserting community post payload:', payload);
   const { data, error } = await supabase.from('community_posts').insert(payload).select().single();

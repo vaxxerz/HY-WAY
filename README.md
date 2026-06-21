@@ -38,6 +38,16 @@ VITE_SUPABASE_ANON_KEY=
 
 카카오 개발자 콘솔에서 JavaScript 키를 발급하고, 로컬 주소와 배포된 Vercel 도메인을 Web 플랫폼에 등록해야 합니다.
 
+## GPS 기능
+
+- 모바일 브라우저의 GPS로 현재 위치 기반 출발지 설정을 지원합니다. GPS 좌표를 그래프에 직접 넣지 않고 가장 가까운 등록 노드를 출발지로 사용합니다.
+- 커뮤니티에서는 현재 위치 250m 이내의 가까운 건물 커뮤니티를 추천합니다.
+- GPS는 실내와 층 정보를 정확히 구분하지 못할 수 있습니다. 위치 기능은 HTTPS 또는 `localhost`에서만 안정적으로 동작합니다.
+
+### Supabase GPS Migration
+
+Supabase SQL Editor에서 [supabase_gps_migration.sql](./supabase_gps_migration.sql)을 실행하세요. 위치 기반 게시글은 정확한 위도/경도를 저장하지 않고, 위치 기반 여부·건물까지의 거리·GPS 정확도만 저장합니다.
+
 ## Vercel 배포
 
 1. GitHub 저장소에 push합니다.

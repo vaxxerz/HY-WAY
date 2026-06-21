@@ -8,6 +8,7 @@ import {
   loadPostsByBuilding,
   toggleLikePost,
 } from './community.js';
+import { findNearbyBuildings, findNearestNode, formatDistance, getCurrentPosition, handleGeolocationError } from './location.js';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -30,6 +31,50 @@ const postTypeIcon = (type) => ({
 }[type] || '✨');
 
 let communityPreviewState = { posts: [], comments: [] };
+let currentLocation = null;
+let nearbyBuildings = [];
+
+async function getLocationForFeature() {
+  currentLocation = await getCurrentPosition();
+  window.HYWAY_LEGACY?.renderCurrentLocationMarker?.(currentLocation.lat, currentLocation.lng, currentLocation.accuracy);
+  return currentLocation;
+}
+
+export async function setStartToNearestNode() {
+  const button = document.querySelector('#useCurrentLocationBtn');
+  const hint = document.querySelector('#locationRouteHint');
+  try {
+    if (button) { button.disabled = true; button.textContent = '현재 위치를 확인하는 중입니다…'; }
+    const location = await getLocationForFeature();
+    const result = findNearestNode(location.lat, location.lng, window.HYWAY_LEGACY?.getNodes?.() || [], { distanceMeter: window.HYWAY_LEGACY?.distanceMeter });
+    if (!result.node) throw new Error('가까운 출발 노드를 찾지 못했습니다.');
+    window.HYWAY_LEGACY?.setStartNode?.(result.node);
+    if (hint) hint.textContent = `가장 가까운 출발 지점은 ‘${result.node.name}’입니다. 출발지로 설정했습니다. GPS 오차 약 ${Math.round(location.accuracy)}m`;
+    showToast(`현재 위치 기준 ‘${result.node.name}’을(를) 출발지로 설정했습니다.`);
+  } catch (error) {
+    if (hint) hint.textContent = handleGeolocationError(error);
+    showToast(handleGeolocationError(error));
+  } finally {
+    if (button) { button.disabled = false; button.textContent = '⌖ 내 위치로 출발'; }
+  }
+}
+
+async function openNearbyCommunity() {
+  const result = document.querySelector('#nearbyCommunityResult');
+  try {
+    if (result) result.innerHTML = '<p class="empty">내 주변 건물을 확인하는 중…</p>';
+    const location = await getLocationForFeature();
+    nearbyBuildings = findNearbyBuildings(location.lat, location.lng, window.HYWAY_LEGACY?.getNodes?.() || [], { limit: 3, distanceMeter: window.HYWAY_LEGACY?.distanceMeter });
+    if (!result) return;
+    if (!nearbyBuildings.length) {
+      result.innerHTML = '<p class="empty">주변 250m 안에 등록된 건물이 없습니다. 전체 건물 커뮤니티를 확인해주세요.</p><button class="secondary" onclick="renderCommunityHome()">전체 건물 커뮤니티 보기</button>';
+      return;
+    }
+    result.innerHTML = nearbyBuildings.map((building) => { const posts = communityPreviewState.posts.filter((post) => post.building_id === building.id); const comments = communityPreviewState.comments.filter((comment) => comment.building_id === building.id); return `<article class="post-card"><b>${escapeHtml(building.name)}</b><div class="post-meta">${formatDistance(building.distanceFromUser)} · 게시글 ${posts.length} · 댓글 ${comments.length}</div><div class="community-actions"><button onclick="openBuildingCommunity('${building.id}')">글쓰기 · 자세히 보기</button><button onclick="focusBuildingOnMap('${building.id}')">지도에서 보기</button></div></article>`; }).join('');
+  } catch (error) {
+    if (result) result.innerHTML = `<p class="empty">${escapeHtml(handleGeolocationError(error))}<br>전체 건물 커뮤니티는 아래에서 계속 확인할 수 있어요.</p>`;
+  }
+}
 
 function buildActivity(building, posts, comments) {
   const buildingPosts = posts.filter((post) => post.building_id === building.id);
@@ -92,7 +137,7 @@ function isHotBuilding(buildingId) {
 async function renderCommunityHome() {
   const view = document.querySelector('#communityView');
   if (!view) return;
-  view.innerHTML = `<div class="section-title"><div><h2>장소 커뮤니티</h2><p>한양대 건물별 실시간 이야기와 제보를 확인하세요</p></div></div>
+  view.innerHTML = `<section style="margin-bottom:15px;padding:14px;border:1px solid #cde3ff;border-radius:16px;background:#edf7ff"><h3 style="margin:0">내 주변 커뮤니티</h3><p class="post-meta">현재 위치 근처 건물 3개를 자동으로 보여드려요</p><div id="nearbyCommunityResult"><p class="empty">내 주변 건물을 확인하는 중…</p></div></section><div class="section-title"><div><h2>장소 커뮤니티</h2><p>한양대 건물별 실시간 이야기와 제보를 확인하세요</p></div></div>
     <div class="list-tools"><input id="communitySearch" placeholder="건물명·그룹 검색"><select id="communityFilter"><option value="all">전체</option><option value="posts">게시글 있음</option><option value="hot">HOT</option><option value="crowd">혼잡 제보 있음</option></select></div>
     <div id="communityCards" class="community-grid"><p class="empty">Supabase에서 커뮤니티를 불러오는 중…</p></div>`;
   document.querySelector('#communitySearch').addEventListener('input', renderBuildingCommunityList);
@@ -100,6 +145,7 @@ async function renderCommunityHome() {
   try {
     await refreshCommunityPreviewData();
     await renderBuildingCommunityList();
+    await openNearbyCommunity();
     if (window.hotBuildingsEnabled !== false) window.renderAllNodes?.();
   } catch (error) {
     console.error('[HYWAY] community preview load failed:', error);
@@ -141,6 +187,7 @@ async function renderBuildingCommunityDetail(buildingId) {
   const building = buildingFor(buildingId);
   const view = document.querySelector('#communityView');
   if (!building || !view) return;
+  const nearbyBuilding = nearbyBuildings.find((nearby) => nearby.id === buildingId);
   console.log('[HYWAY] building community opened:', buildingId);
   view.innerHTML = `
     <button class="ghost" onclick="renderCommunityHome()">← 목록</button>
@@ -151,6 +198,7 @@ async function renderBuildingCommunityDetail(buildingId) {
       <button onclick="focusBuildingOnMap('${buildingId}')">지도에서 보기</button>
       <button onclick="startRouteToBuilding('${buildingId}')">이 건물로 길찾기</button>
     </div></div>
+    ${nearbyBuilding ? `<p class="community-note">현재 위치 근처 건물입니다 · 약 ${formatDistance(nearbyBuilding.distanceFromUser)} · 정확한 좌표는 저장하지 않습니다.</p>` : '<p class="community-note">이 건물은 현재 위치와 떨어져 있을 수 있습니다. 정확한 장소 기반 커뮤니티를 위해 현재 위치 근처 건물에 글을 작성하는 것을 권장합니다.</p>'}
     <form id="communityPostForm" class="community-form" data-building-id="${escapeHtml(buildingId)}">
       <select name="type"><option>잡담</option><option>길찾기 팁</option><option>혼잡도 제보</option><option>질문</option><option>공지</option></select>
       <input name="title" required maxlength="80" placeholder="제목">
@@ -171,6 +219,9 @@ async function renderBuildingCommunityDetail(buildingId) {
       content: String(values.get('content') || '').trim(),
       author: String(values.get('author') || '').trim() || '익명',
       crowdLevel: values.get('crowdLevel') || null,
+      locationBased: nearbyBuildings.some((nearby) => nearby.id === buildingId),
+      distanceToBuilding: nearbyBuildings.find((nearby) => nearby.id === buildingId)?.distanceFromUser ?? null,
+      userAccuracy: currentLocation?.accuracy ?? null,
     };
     if (!post.title || !post.content) return showToast('제목과 내용을 입력해주세요.');
     const saved = await createCommunityPost(post);
@@ -225,6 +276,8 @@ window.renderBuildingCommunityDetail = renderBuildingCommunityDetail;
 window.renderPostList = renderPostList;
 window.renderComments = renderComments;
 window.toggleLikePost = likePost;
+window.setStartToNearestNode = setStartToNearestNode;
+window.openNearbyCommunity = openNearbyCommunity;
 
 window.openCommunityTab = async function openCommunityTab() {
   console.log('[HYWAY] community tab opened');
@@ -254,3 +307,5 @@ console.log('[HYWAY] legacy community bridge ready', {
   urlConfigured: Boolean(CONFIG.supabaseUrl),
   deviceIdReady: Boolean(getOrCreateDeviceId()),
 });
+
+document.querySelector('#useCurrentLocationBtn')?.addEventListener('click', setStartToNearestNode);
