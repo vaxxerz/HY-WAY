@@ -80,6 +80,15 @@ async function renderBuildingCommunityList() {
   }).join('') || '<p class="empty">조건에 맞는 건물이 없습니다.</p>';
 }
 
+function isHotBuilding(buildingId) {
+  const buildings = window.HYWAY_LEGACY?.getBuildings?.() || [];
+  return buildings
+    .map((building) => buildActivity(building, communityPreviewState.posts, communityPreviewState.comments))
+    .sort((a, b) => b.score - a.score || b.postCount - a.postCount || a.building.name.localeCompare(b.building.name, 'ko'))
+    .slice(0, 3)
+    .some((item) => item.score > 0 && item.building.id === buildingId);
+}
+
 async function renderCommunityHome() {
   const view = document.querySelector('#communityView');
   if (!view) return;
@@ -91,6 +100,7 @@ async function renderCommunityHome() {
   try {
     await refreshCommunityPreviewData();
     await renderBuildingCommunityList();
+    if (window.hotBuildingsEnabled !== false) window.renderAllNodes?.();
   } catch (error) {
     console.error('[HYWAY] community preview load failed:', error);
     document.querySelector('#communityCards').innerHTML = '<p class="empty">커뮤니티를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.</p>';
@@ -208,7 +218,7 @@ async function likePost(postId, buildingId) {
   }
 }
 
-window.HYWAY_COMMUNITY = { renderCommunityHome, renderBuildingCommunityList, renderBuildingCommunityDetail, renderPostList };
+window.HYWAY_COMMUNITY = { isHotBuilding, renderCommunityHome, renderBuildingCommunityList, renderBuildingCommunityDetail, renderPostList };
 window.renderCommunityHome = renderCommunityHome;
 window.renderBuildingCommunityList = renderBuildingCommunityList;
 window.renderBuildingCommunityDetail = renderBuildingCommunityDetail;
