@@ -60,12 +60,11 @@ export async function setStartToNearestNode() {
 }
 
 async function openNearbyCommunity() {
-  const button = document.querySelector('#nearbyCommunityBtn');
   const result = document.querySelector('#nearbyCommunityResult');
   try {
-    if (button) { button.disabled = true; button.textContent = '내 주변 건물을 찾는 중…'; }
+    if (result) result.innerHTML = '<p class="empty">내 주변 건물을 확인하는 중…</p>';
     const location = await getLocationForFeature();
-    nearbyBuildings = findNearbyBuildings(location.lat, location.lng, window.HYWAY_LEGACY?.getNodes?.() || [], { distanceMeter: window.HYWAY_LEGACY?.distanceMeter });
+    nearbyBuildings = findNearbyBuildings(location.lat, location.lng, window.HYWAY_LEGACY?.getNodes?.() || [], { limit: 3, distanceMeter: window.HYWAY_LEGACY?.distanceMeter });
     if (!result) return;
     if (!nearbyBuildings.length) {
       result.innerHTML = '<p class="empty">주변 250m 안에 등록된 건물이 없습니다. 전체 건물 커뮤니티를 확인해주세요.</p><button class="secondary" onclick="renderCommunityHome()">전체 건물 커뮤니티 보기</button>';
@@ -73,9 +72,7 @@ async function openNearbyCommunity() {
     }
     result.innerHTML = nearbyBuildings.map((building) => { const posts = communityPreviewState.posts.filter((post) => post.building_id === building.id); const comments = communityPreviewState.comments.filter((comment) => comment.building_id === building.id); return `<article class="post-card"><b>${escapeHtml(building.name)}</b><div class="post-meta">${formatDistance(building.distanceFromUser)} · 게시글 ${posts.length} · 댓글 ${comments.length}</div><div class="community-actions"><button onclick="openBuildingCommunity('${building.id}')">글쓰기 · 자세히 보기</button><button onclick="focusBuildingOnMap('${building.id}')">지도에서 보기</button></div></article>`; }).join('');
   } catch (error) {
-    if (result) result.innerHTML = `<p class="empty">${escapeHtml(handleGeolocationError(error))}</p>`;
-  } finally {
-    if (button) { button.disabled = false; button.textContent = '내 주변 건물 찾기'; }
+    if (result) result.innerHTML = `<p class="empty">${escapeHtml(handleGeolocationError(error))}<br>전체 건물 커뮤니티는 아래에서 계속 확인할 수 있어요.</p>`;
   }
 }
 
@@ -140,15 +137,15 @@ function isHotBuilding(buildingId) {
 async function renderCommunityHome() {
   const view = document.querySelector('#communityView');
   if (!view) return;
-  view.innerHTML = `<section style="margin-bottom:15px;padding:14px;border:1px solid #cde3ff;border-radius:16px;background:#edf7ff"><h3 style="margin:0">내 주변 커뮤니티</h3><p class="post-meta">현재 위치 근처 건물 커뮤니티만 모아봤어요</p><button id="nearbyCommunityBtn" class="secondary" style="margin-top:9px">내 주변 건물 찾기</button><div id="nearbyCommunityResult"></div></section><div class="section-title"><div><h2>장소 커뮤니티</h2><p>한양대 건물별 실시간 이야기와 제보를 확인하세요</p></div></div>
+  view.innerHTML = `<section style="margin-bottom:15px;padding:14px;border:1px solid #cde3ff;border-radius:16px;background:#edf7ff"><h3 style="margin:0">내 주변 커뮤니티</h3><p class="post-meta">현재 위치 근처 건물 3개를 자동으로 보여드려요</p><div id="nearbyCommunityResult"><p class="empty">내 주변 건물을 확인하는 중…</p></div></section><div class="section-title"><div><h2>장소 커뮤니티</h2><p>한양대 건물별 실시간 이야기와 제보를 확인하세요</p></div></div>
     <div class="list-tools"><input id="communitySearch" placeholder="건물명·그룹 검색"><select id="communityFilter"><option value="all">전체</option><option value="posts">게시글 있음</option><option value="hot">HOT</option><option value="crowd">혼잡 제보 있음</option></select></div>
     <div id="communityCards" class="community-grid"><p class="empty">Supabase에서 커뮤니티를 불러오는 중…</p></div>`;
   document.querySelector('#communitySearch').addEventListener('input', renderBuildingCommunityList);
   document.querySelector('#communityFilter').addEventListener('change', renderBuildingCommunityList);
-  document.querySelector('#nearbyCommunityBtn').addEventListener('click', openNearbyCommunity);
   try {
     await refreshCommunityPreviewData();
     await renderBuildingCommunityList();
+    await openNearbyCommunity();
     if (window.hotBuildingsEnabled !== false) window.renderAllNodes?.();
   } catch (error) {
     console.error('[HYWAY] community preview load failed:', error);
