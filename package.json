@@ -1,0 +1,16 @@
+{
+  "name": "hyway",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "HY-WAY: 한양대의 가장 빠른 길",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "latest",
+    "vite": "latest"
+  }
+}
