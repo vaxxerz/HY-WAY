@@ -190,6 +190,7 @@ async function renderBuildingCommunityDetail(buildingId) {
   const building = buildingFor(buildingId);
   const view = document.querySelector('#communityView');
   if (!building || !view) return;
+  const nearbyBuilding = nearbyBuildings.find((nearby) => nearby.id === buildingId);
   console.log('[HYWAY] building community opened:', buildingId);
   view.innerHTML = `
     <button class="ghost" onclick="renderCommunityHome()">← 목록</button>
@@ -200,6 +201,7 @@ async function renderBuildingCommunityDetail(buildingId) {
       <button onclick="focusBuildingOnMap('${buildingId}')">지도에서 보기</button>
       <button onclick="startRouteToBuilding('${buildingId}')">이 건물로 길찾기</button>
     </div></div>
+    ${nearbyBuilding ? `<p class="community-note">현재 위치 근처 건물입니다 · 약 ${formatDistance(nearbyBuilding.distanceFromUser)} · 정확한 좌표는 저장하지 않습니다.</p>` : '<p class="community-note">이 건물은 현재 위치와 떨어져 있을 수 있습니다. 정확한 장소 기반 커뮤니티를 위해 현재 위치 근처 건물에 글을 작성하는 것을 권장합니다.</p>'}
     <form id="communityPostForm" class="community-form" data-building-id="${escapeHtml(buildingId)}">
       <select name="type"><option>잡담</option><option>길찾기 팁</option><option>혼잡도 제보</option><option>질문</option><option>공지</option></select>
       <input name="title" required maxlength="80" placeholder="제목">
