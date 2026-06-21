@@ -71,7 +71,7 @@ async function renderBuildingCommunityList() {
   target.innerHTML = activity.map((item, index) => {
     const previews = [...item.posts].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 3);
     return `<article class="building-card ${index < 3 && item.score ? 'hot' : ''}">
-      <div class="card-head"><span class="rank">#${index + 1}${index === 0 && item.score ? ' · HOT' : ''}</span><span class="activity">${item.score}<small> 활동</small></span></div>
+      <div class="card-head"><span class="rank">#${index + 1}${index < 3 && item.score ? ' · HOT' : ''}</span><span class="activity">${item.score}<small> 활동</small></span></div>
       <h3>${escapeHtml(item.building.name)}</h3>
       <p class="post-meta">${item.postCount ? '지금 이 건물에서 이야기 중' : '아직 새 글이 없어요'} · ${item.lastActivityAt ? relativeTime(item.lastActivityAt) : '활동 없음'}</p>
       <div class="feed-preview">${previews.length ? previews.map((post) => `<button onclick="openBuildingCommunity('${item.building.id}')"><b>${postTypeIcon(post.type)} ${escapeHtml(post.title)}</b><span>♥ ${post.likes_count || 0} · 댓글 ${communityPreviewState.comments.filter((comment) => comment.post_id === post.id).length}</span></button>`).join('') : '<span class="empty">첫 이야기를 남겨 보세요.</span>'}</div>
