@@ -8,16 +8,45 @@ export async function loadCommunityPosts() {
 }
 
 export async function loadPostsByBuilding(buildingId) {
-  if (!supabase) return [];
+  console.log('[HYWAY] loading posts for building:', buildingId);
+  if (!supabase) {
+    console.error('[HYWAY] Supabase client is missing');
+    return [];
+  }
   const { data, error } = await supabase.from('community_posts').select('*').eq('building_id', buildingId).order('created_at', { ascending: false });
-  if (error) throw new Error('건물 커뮤니티 글 조회 실패');
-  return data;
+  if (error) {
+    console.error('[HYWAY] loadPostsByBuilding failed:', error);
+    alert(`게시글을 불러오지 못했습니다: ${error.message}`);
+    return [];
+  }
+  console.log('[HYWAY] loaded posts:', data);
+  return data || [];
 }
 
 export async function createCommunityPost(post) {
-  if (!supabase) throw new Error('Supabase URL 또는 anon key가 설정되지 않았습니다.');
-  const { data, error } = await supabase.from('community_posts').insert(post).select().single();
-  if (error) throw new Error('게시글 작성 실패');
+  console.log('[HYWAY] createCommunityPost called:', post);
+  if (!supabase) {
+    console.error('[HYWAY] Supabase client is missing');
+    alert('Supabase 연결이 초기화되지 않았습니다.');
+    return null;
+  }
+  const payload = {
+    building_id: post.buildingId,
+    building_name: post.buildingName,
+    type: post.type,
+    title: post.title,
+    content: post.content,
+    author: post.author || '익명',
+    crowd_level: post.crowdLevel || null,
+  };
+  console.log('[HYWAY] inserting community post payload:', payload);
+  const { data, error } = await supabase.from('community_posts').insert(payload).select().single();
+  if (error) {
+    console.error('[HYWAY] community post insert failed:', error);
+    alert(`게시글 저장 실패: ${error.message}`);
+    return null;
+  }
+  console.log('[HYWAY] community post insert success:', data);
   return data;
 }
 

@@ -1,6 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 import { CONFIG } from './config.js';
 
+console.log('[HYWAY] app started');
+console.log('[HYWAY] Supabase URL exists:', Boolean(CONFIG.supabaseUrl));
+console.log('[HYWAY] Supabase anon key exists:', Boolean(CONFIG.supabaseAnonKey));
+
 export const supabase = CONFIG.supabaseUrl && CONFIG.supabaseAnonKey
   ? createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey)
   : null;

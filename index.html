@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>HY-WAY · 한양대의 가장 빠른 길</title>
+  <link rel="icon" href="data:,">
   <style>
     :root{--navy:#092b67;--blue:#1769e0;--mint:#1ed5c0;--ink:#14213d;--muted:#65728c;--bg:#f3f7fc;--line:#dde6f2;--purple:#7655ed;--card:#fff}
     *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 Inter,Pretendard,Arial,sans-serif}button,input,select,textarea{font:inherit}button{cursor:pointer;border:0}.app{max-width:1500px;margin:auto;padding:18px}
@@ -163,5 +164,6 @@ function deleteReport(id){if(confirm('이 제보를 삭제하시겠습니까?'))
 function toggleSearchPanel(collapse){const panel=$('#searchPanel'),shouldCollapse=typeof collapse==='boolean'?collapse:!panel.classList.contains('collapsed');panel.classList.toggle('collapsed',shouldCollapse);if(!shouldCollapse)setTimeout(()=>$('#startInput').focus(),0)}
 function activateTab(button){document.querySelectorAll('.tabbar button').forEach(b=>b.classList.remove('active'));button.classList.add('active')}
 function refreshDashboard(){if(!$('#statNodes'))return;$('#statNodes').textContent=DATA.nodes.length;$('#statEdges').textContent=DATA.edges.length;$('#statPortals').textContent=getPortalEdges().length;$('#statHills').textContent=DATA.edges.filter(e=>getEffectiveUphill(e)>0).length;$('#statFeedback').textContent=loadFeedback().length}
+window.HYWAY_LEGACY={getBuilding:id=>nodeById.get(id)||null};
 decodeData().then(()=>{refreshDashboard();setInterval(refreshDashboard,1200)});
-</script></body></html>
+</script><script type="module" src="/src/legacy-supabase-bridge.js"></script></body></html>
