@@ -3,6 +3,7 @@ import { supabase, getOrCreateDeviceId } from './supabase.js';
 import {
   createCommunityPost,
   createComment,
+  loadCommunityPosts,
   loadComments,
   loadPostsByBuilding,
   toggleLikePost,
@@ -22,6 +23,78 @@ const relativeTime = (date) => {
 
 function buildingFor(id) {
   return window.HYWAY_LEGACY?.getBuilding?.(id) ?? null;
+}
+
+const postTypeIcon = (type) => ({
+  '잡담': '💬', '길찾기 팁': '🧭', '혼잡도 제보': '🔥', '시설 정보': '🏢', '질문': '❓', '공지': '📌',
+}[type] || '✨');
+
+let communityPreviewState = { posts: [], comments: [] };
+
+function buildActivity(building, posts, comments) {
+  const buildingPosts = posts.filter((post) => post.building_id === building.id);
+  const buildingComments = comments.filter((comment) => comment.building_id === building.id);
+  const lastActivityAt = [...buildingPosts, ...buildingComments]
+    .map((item) => item.created_at)
+    .filter(Boolean)
+    .sort()
+    .at(-1);
+  const likes = buildingPosts.reduce((sum, post) => sum + (post.likes_count || 0), 0);
+  const ageHours = lastActivityAt ? (Date.now() - new Date(lastActivityAt).getTime()) / 3600000 : Infinity;
+  const recentBonus = ageHours <= 1 ? 20 : ageHours <= 6 ? 12 : ageHours <= 24 ? 8 : ageHours <= 72 ? 4 : 0;
+  return { building, posts: buildingPosts, postCount: buildingPosts.length, commentCount: buildingComments.length, likes, lastActivityAt, score: buildingPosts.length * 5 + buildingComments.length * 2 + likes + recentBonus };
+}
+
+async function refreshCommunityPreviewData() {
+  console.log('[HYWAY] loading community previews from Supabase');
+  const [posts, commentsResult] = await Promise.all([
+    loadCommunityPosts(),
+    supabase ? supabase.from('community_comments').select('post_id, building_id, created_at') : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (commentsResult.error) console.error('[HYWAY] community preview comments load failed:', commentsResult.error);
+  communityPreviewState = { posts: posts || [], comments: commentsResult.data || [] };
+  console.log('[HYWAY] community previews loaded:', { posts: communityPreviewState.posts.length, comments: communityPreviewState.comments.length });
+}
+
+async function renderBuildingCommunityList() {
+  const target = document.querySelector('#communityCards');
+  if (!target) return;
+  const query = (document.querySelector('#communitySearch')?.value || '').toLowerCase();
+  const filter = document.querySelector('#communityFilter')?.value || 'all';
+  const buildings = window.HYWAY_LEGACY?.getBuildings?.() || [];
+  let activity = buildings.map((building) => buildActivity(building, communityPreviewState.posts, communityPreviewState.comments))
+    .filter(({ building }) => `${building.name} ${building.building || ''} ${building.group || ''}`.toLowerCase().includes(query));
+  if (filter === 'posts') activity = activity.filter((item) => item.postCount);
+  if (filter === 'hot') activity = activity.filter((item) => item.score >= 12);
+  if (filter === 'crowd') activity = activity.filter((item) => item.posts.some((post) => ['혼잡', '매우 혼잡'].includes(post.crowd_level)));
+  activity.sort((a, b) => b.score - a.score || b.postCount - a.postCount || a.building.name.localeCompare(b.building.name, 'ko'));
+  target.innerHTML = activity.map((item, index) => {
+    const previews = [...item.posts].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 3);
+    return `<article class="building-card ${index < 3 && item.score ? 'hot' : ''}">
+      <div class="card-head"><span class="rank">#${index + 1}${index === 0 && item.score ? ' · HOT' : ''}</span><span class="activity">${item.score}<small> 활동</small></span></div>
+      <h3>${escapeHtml(item.building.name)}</h3>
+      <p class="post-meta">${item.postCount ? '지금 이 건물에서 이야기 중' : '아직 새 글이 없어요'} · ${item.lastActivityAt ? relativeTime(item.lastActivityAt) : '활동 없음'}</p>
+      <div class="feed-preview">${previews.length ? previews.map((post) => `<button onclick="openBuildingCommunity('${item.building.id}')"><b>${postTypeIcon(post.type)} ${escapeHtml(post.title)}</b><span>♥ ${post.likes_count || 0} · 댓글 ${communityPreviewState.comments.filter((comment) => comment.post_id === post.id).length}</span></button>`).join('') : '<span class="empty">첫 이야기를 남겨 보세요.</span>'}</div>
+      <div class="community-actions"><button onclick="openBuildingCommunity('${item.building.id}')">자세히 보기</button><button onclick="focusBuildingOnMap('${item.building.id}')">지도에서 보기</button></div>
+    </article>`;
+  }).join('') || '<p class="empty">조건에 맞는 건물이 없습니다.</p>';
+}
+
+async function renderCommunityHome() {
+  const view = document.querySelector('#communityView');
+  if (!view) return;
+  view.innerHTML = `<div class="section-title"><div><h2>장소 커뮤니티</h2><p>한양대 건물별 실시간 이야기와 제보를 확인하세요</p></div></div>
+    <div class="list-tools"><input id="communitySearch" placeholder="건물명·그룹 검색"><select id="communityFilter"><option value="all">전체</option><option value="posts">게시글 있음</option><option value="hot">HOT</option><option value="crowd">혼잡 제보 있음</option></select></div>
+    <div id="communityCards" class="community-grid"><p class="empty">Supabase에서 커뮤니티를 불러오는 중…</p></div>`;
+  document.querySelector('#communitySearch').addEventListener('input', renderBuildingCommunityList);
+  document.querySelector('#communityFilter').addEventListener('change', renderBuildingCommunityList);
+  try {
+    await refreshCommunityPreviewData();
+    await renderBuildingCommunityList();
+  } catch (error) {
+    console.error('[HYWAY] community preview load failed:', error);
+    document.querySelector('#communityCards').innerHTML = '<p class="empty">커뮤니티를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.</p>';
+  }
 }
 
 function showToast(message) {
@@ -135,16 +208,18 @@ async function likePost(postId, buildingId) {
   }
 }
 
-window.HYWAY_COMMUNITY = { renderBuildingCommunityDetail, renderPostList };
+window.HYWAY_COMMUNITY = { renderCommunityHome, renderBuildingCommunityList, renderBuildingCommunityDetail, renderPostList };
+window.renderCommunityHome = renderCommunityHome;
+window.renderBuildingCommunityList = renderBuildingCommunityList;
 window.renderBuildingCommunityDetail = renderBuildingCommunityDetail;
 window.renderPostList = renderPostList;
 window.renderComments = renderComments;
 window.toggleLikePost = likePost;
 
-const originalOpenCommunityTab = window.openCommunityTab;
-window.openCommunityTab = function openCommunityTab(...args) {
+window.openCommunityTab = async function openCommunityTab() {
   console.log('[HYWAY] community tab opened');
-  return originalOpenCommunityTab?.apply(this, args);
+  window.showPage?.(2);
+  await renderCommunityHome();
 };
 window.openBuildingCommunity = async function openBuildingCommunity(buildingId) {
   console.log('[HYWAY] building community open requested:', buildingId);
